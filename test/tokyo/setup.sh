@@ -5,7 +5,8 @@ export AWS_REGION=ap-northeast-1 AWS_DEFAULT_REGION=ap-northeast-1
 for i in 1 2 3 4 5; do
   if C=$(AWS_PROFILE=aws aws configure export-credentials --format env 2>/dev/null); then eval "$C"; unset AWS_PROFILE; break; fi; sleep 3
 done
-aws sts get-caller-identity --query Account --output text | grep -qx <ACCOUNT_ID> || { echo "wrong/no creds"; exit 1; }
+ACC=$(aws sts get-caller-identity --query Account --output text) || { echo "no creds"; exit 1; }
+[ -n "${EXPECTED_ACCOUNT:-}" ] && [ "$ACC" != "$EXPECTED_ACCOUNT" ] && { echo "wrong account $ACC"; exit 1; }
 P=rfc-tls
 T="Key=Project,Value=$P"
 VPC=$(aws ec2 create-vpc --cidr-block 10.77.0.0/16 --tag-specifications "ResourceType=vpc,Tags=[{$T},{Key=Name,Value=$P}]" --query Vpc.VpcId --output text)

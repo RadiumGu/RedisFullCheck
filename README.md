@@ -1,22 +1,25 @@
-Redis-full-check is used to compare whether two redis have the same data. We also offer a data synchronization tool called [redis-shake](https://github.com/aliyun/redis-shake) to syncing data from one redis to another redis.<br>
+> **This is a fork of [tair-opensource/RedisFullCheck](https://github.com/tair-opensource/RedisFullCheck) that adds TLS support** (standalone and cluster, incl. mTLS), validated against Amazon ElastiCache Redis OSS 7.0 and Valkey 9.0 with in-transit encryption. See [TLS](#tls). 中文说明见 [README_CN.md](README_CN.md).
+
+Redis-full-check is used to compare whether two redis have the same data. We also offer a data synchronization tool called [RedisShake](https://github.com/tair-opensource/RedisShake) to syncing data from one redis to another redis.<br>
 Thanks to the Douyu's WSD team for the support. <br>
 
-* [中文文档](https://yq.aliyun.com/articles/690463)
-* [Download redis-full-check.tar.gz](https://github.com/alibaba/RedisFullCheck/releases)
-* [第一次使用，如何进行配置](https://github.com/alibaba/RedisFullCheck/wiki/%E7%AC%AC%E4%B8%80%E6%AC%A1%E4%BD%BF%E7%94%A8%EF%BC%8C%E5%A6%82%E4%BD%95%E8%BF%9B%E8%A1%8C%E9%85%8D%E7%BD%AE%EF%BC%9F)
+* [中文文档 (upstream)](https://developer.aliyun.com/article/690463)
+* [Download / build](#usage) — this fork: [releases](https://github.com/RadiumGu/RedisFullCheck/releases)
+* [第一次使用，如何进行配置 (upstream wiki)](https://github.com/tair-opensource/RedisFullCheck/wiki/%E7%AC%AC%E4%B8%80%E6%AC%A1%E4%BD%BF%E7%94%A8%EF%BC%8C%E5%A6%82%E4%BD%95%E8%BF%9B%E8%A1%8C%E9%85%8D%E7%BD%AE%EF%BC%9F)
 
 # redis-full-check
 ---
 Redis-full-check is developed and maintained by NoSQL Team in Alibaba-Cloud Database department.<br>
 Redis-full-check performs full data verification by comparing the data of the source database and the destination database. The entire check process consists of multiple comparisons, in every comparison, redis-full-check fetches data from two dabatases and then compared, the inconsistent data is put into sqlite3 db for the next comparison. By this iteratively comparing method, the difference continues to converge. The following figure shows the dataflow. In every comparison which is the yellow box, redis-full-check fetches all keys firstly. After that, it runs comparison and stores the difference result(key and field) into the sqlite3 db which is the position that keys and fields can be fetched in next round instead of the source database.<br>
-![dataflow.png](https://github.com/aliyun/redis-full-check/blob/master/resources/dataflow.png)<br>
+![dataflow.png](resources/dataflow.png)<br>
 Redis-full-check fetches keys from source and then checks these keys exist on the target. So if one key exists on the target but lack on the source, redis-full-check can't find it. If you want to know whether the data in the source and destination databases are exactly the same, you need to set up a bidirectional link: <br>
 
 * source->RedisFullCheck->target
 * target->RedisFullCheck->source
 
 # supports
-standalone, cluster, proxy(aliyun-cluster, tencent-cluster). Redis version from 2.x to 7.x (Don't support Redis Modules).
+standalone, cluster, proxy(aliyun-cluster, tencent-cluster). Redis version from 2.x to 7.x, and Valkey (tested with 9.0) (Don't support Redis Modules).<br>
+Plaintext or TLS (incl. mTLS) on each side independently. Tested with TLS on ElastiCache Redis OSS 7.0 and Valkey 9.0, standalone and cluster mode.
 
 # Code branch rules
 Version rules: a.b.c.<br>
@@ -67,6 +70,14 @@ Application Options:
   -f, --filterlist=FILTER           if the filter list isn't empty, all elements in list will be synced. The input should be split by '|'. The end of the
                                     string is followed by a * to indicate a prefix match, otherwise it is a full match. e.g.: 'abc*|efg|m*' matches 'abc',
                                     'abc1', 'efg', 'm', 'mxyz', but 'efgh', 'p' aren't'
+      --sourcetls                   connect to source redis with TLS
+      --sourcetlsinsecure           skip server certificate verification for source (not recommended)
+      --sourcetlscacert=FILE        PEM CA bundle for verifying source server cert; default is system roots
+      --sourcetlscert=FILE          PEM client certificate for source (mTLS)
+      --sourcetlskey=FILE           PEM client key for source (mTLS)
+      --sourcetlsservername=NAME    override TLS server name (SNI/verification) for source
+      --targettls / --targettlsinsecure / --targettlscacert / --targettlscert / --targettlskey / --targettlsservername
+                                    same as above, for target
   -v, --version
 
 Help Options:
@@ -75,12 +86,36 @@ Help Options:
 
 # Usage
 ---
-Run `./bin/redis-full-check.darwin64` or `redis-full-check.linux64` which is built in OSX and Linux respectively, however, the binaries aren't always the newest version.<br>
-Or you can build redis-full-check yourself according to the following steps:<br>
-*  git clone https://github.com/alibaba/RedisFullCheck.git
+Prebuilt binaries of this fork (when published) are on the [releases page](https://github.com/RadiumGu/RedisFullCheck/releases). Build them on the target platform because sqlite3 needs cgo: `linux/amd64` (x86 EC2) and `linux/arm64` (Graviton EC2) are both supported.<br>
+Build from source (Go >= 1.17 and gcc):<br>
+*  git clone https://github.com/RadiumGu/RedisFullCheck.git
 *  cd RedisFullCheck/
 *  ./build.sh
 *  ./bin/redis-full-check -s $(source_redis_ip_port) -p $(source_password) -t $(target_redis_ip_port) -a $(target_password) # these parameters should be given by users
+
+On Amazon Linux 2023: `sudo dnf install -y golang gcc git && ./build.sh` (same on x86_64 and aarch64).
+
+# TLS
+---
+Enable TLS per side with `--sourcetls` / `--targettls`. The server certificate is verified against the system CA bundle by default, which works for Amazon ElastiCache / MemoryDB. Use `--*tlscacert` for a private CA, `--*tlscert` + `--*tlskey` for mTLS, and `--*tlsinsecure` only for troubleshooting.<br>
+
+```
+# ElastiCache (TLS + AUTH) standalone -> ElastiCache cluster mode
+./bin/redis-full-check \
+  -s master.src.xxxx.apne1.cache.amazonaws.com:6379 -p '<src-token>' --sourcetls \
+  -t master@clustercfg.dst.xxxx.apne1.cache.amazonaws.com:6379 -a '<dst-token>' --targetdbtype 1 --targettls \
+  -m 1 --comparetimes 3
+
+# self-managed redis with private CA and client cert (mTLS) as source
+./bin/redis-full-check -s 10.0.0.10:6380 --sourcetls --sourcetlscacert ca.crt --sourcetlscert client.crt --sourcetlskey client.key \
+  -t master.dst.xxxx.apne1.cache.amazonaws.com:6379 --targettls
+```
+
+Notes:
+* For cluster mode, pass the configuration endpoint as `master@<endpoint>:6379` with `--targetdbtype 1` (or `--sourcedbtype 1`). Nodes are discovered by `CLUSTER NODES` and every node connection uses the same TLS settings.
+* Certificate verification uses the node address returned by the cluster. With ElastiCache (TLS enabled) verification passes with default settings (tested on Redis OSS 7.0 / Valkey 9.0). If your cluster returns IPs and the certificate has no IP SAN, use `--*tlsservername` (e.g. a wildcard name in the cert) or `--*tlsinsecure`.
+* If you forget `--*tls` against a TLS-only endpoint, the connection hangs instead of failing quickly. Run with a timeout in automation.
+* Validation scripts: [test/tokyo](test/tokyo).
 
 Here comes the sqlite3 example to display the conflict result:<br>
 ```
@@ -108,9 +143,9 @@ id          field       conflict_type  key_id
 ---
 We also provide some tools for synchronization in Shake series.<br>
 
-* [MongoShake](https://github.com/aliyun/MongoShake): mongodb data synchronization tool.
-* [RedisShake](https://github.com/aliyun/RedisShake): redis data synchronization tool.
-* [RedisFullCheck](https://github.com/aliyun/RedisFullCheck): redis data synchronization verification tool.
+* [MongoShake](https://github.com/alibaba/MongoShake): mongodb data synchronization tool.
+* [RedisShake](https://github.com/tair-opensource/RedisShake): redis data synchronization tool.
+* [RedisFullCheck](https://github.com/tair-opensource/RedisFullCheck): redis data synchronization verification tool (upstream of this fork).
 
 # License
 - On `20230427` and later, we distribute this library under the new [Apache2.0](https://www.apache.org/licenses/LICENSE-2.0) protocol, `1.4.10` is the first version to support the Apache2.0 protocol.

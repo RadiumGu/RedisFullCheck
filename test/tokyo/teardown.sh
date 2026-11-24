@@ -5,7 +5,8 @@ export AWS_REGION=ap-northeast-1 AWS_DEFAULT_REGION=ap-northeast-1
 for i in 1 2 3 4 5; do
   if C=$(AWS_PROFILE=aws aws configure export-credentials --format env 2>/dev/null); then eval "$C"; unset AWS_PROFILE; break; fi; sleep 3
 done
-aws sts get-caller-identity --query Account --output text | grep -qx <ACCOUNT_ID> || { echo "wrong/no creds"; exit 1; }
+ACC=$(aws sts get-caller-identity --query Account --output text) || { echo "no creds"; exit 1; }
+[ -n "${EXPECTED_ACCOUNT:-}" ] && [ "$ACC" != "$EXPECTED_ACCOUNT" ] && { echo "wrong account $ACC"; exit 1; }
 cd "$(dirname "$0")"; source ./env.sh
 for g in rfc-tls-r70-std rfc-tls-r70-cls rfc-tls-v90-std rfc-tls-v90-cls; do aws elasticache delete-replication-group --replication-group-id $g >/dev/null; done
 aws ec2 terminate-instances --instance-ids $IID >/dev/null; aws ec2 wait instance-terminated --instance-ids $IID

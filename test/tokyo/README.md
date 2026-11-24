@@ -12,3 +12,9 @@ Cluster example: `-t master@clustercfg.xxx.cache.amazonaws.com:6379 --targetdbty
 Results (2026-11-24): all 16 cases pass — plaintext/mTLS/TLS sources to all 4 targets, cluster<->cluster
 and standalone<->standalone with TLS both sides, wrong-CA rejected, insecure accepted, injected drift detected.
 Without `--targettls`, the tool hangs against a TLS endpoint (no clean error; use a timeout).
+
+Run order: `setup.sh` (writes `env.sh`, git-ignored, holds resource IDs and the AUTH token) ->
+wait for the 4 groups to be `available` -> build on the runner -> run `runner_test.sh` on the runner with
+`H_R70_STD H_R70_CLS H_V90_STD H_V90_CLS VALKEY_AUTH` exported -> `teardown.sh`.
+Set `EXPECTED_ACCOUNT=<12-digit id>` to guard against running in the wrong account.
+`creds.sh` assumes an AWS CLI profile named `aws`; edit it for your environment.

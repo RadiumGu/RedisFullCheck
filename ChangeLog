@@ -1,3 +1,10 @@
+2026-11-24 RadiumGu (fork).
+    * VERSION: 1.4.12
+    * FEATURE: TLS support for source and target (standalone, cluster,
+    proxy), incl. custom CA, mTLS client cert, SNI override and insecure
+    mode: --sourcetls* / --targettls*.
+    * IMPROVE: vendor najoast/redis-go-cluster under third_party with TLS.
+    * BUGFIX: cluster connect error was shadowed and silently dropped.
 2023-04-27 Alibaba Cloud.
     * VERSION: 1.4.10
     * BUGFIX: Fix CGO_ENABLED=0 error

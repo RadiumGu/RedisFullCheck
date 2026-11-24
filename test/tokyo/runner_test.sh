@@ -2,10 +2,8 @@
 # Runs ON the Tokyo runner. Needs: VALKEY_AUTH, redis-full-check, valkey-cli, python3.
 set -uo pipefail
 W=/opt/rfc/work; mkdir -p $W; cd $W
-H_R70_STD=master.rfc-tls-r70-std.xxxxxx.apne1.cache.amazonaws.com
-H_R70_CLS=clustercfg.rfc-tls-r70-cls.xxxxxx.apne1.cache.amazonaws.com
-H_V90_STD=master.rfc-tls-v90-std.xxxxxx.apne1.cache.amazonaws.com
-H_V90_CLS=clustercfg.rfc-tls-v90-cls.xxxxxx.apne1.cache.amazonaws.com
+# endpoints come from the environment (see README): primary / configuration endpoints of the 4 groups
+: "${H_R70_STD:?}" "${H_R70_CLS:?}" "${H_V90_STD:?}" "${H_V90_CLS:?}" "${VALKEY_AUTH:?}"
 CA=/etc/pki/tls/certs/ca-bundle.crt
 
 # ---- dataset (deterministic) ----
@@ -87,7 +85,6 @@ echo "=== E: negative: wrong CA with verification must fail; --targettlsinsecure
 run wrongca-v90-std fail "${SRC[@]}" -t $H_V90_STD:6379 --targetdbtype 0 --targettls --targettlscacert $W/ca.crt -a $VALKEY_AUTH
 run insecure-v90-std ok "${SRC[@]}" -t $H_V90_STD:6379 --targetdbtype 0 --targettls --targettlsinsecure -a $VALKEY_AUTH
 echo "=== F: drift detection: mutate target, expect diffs"
-A=(); 
 valkey-cli --tls --cacert $CA -h $H_R70_STD -p 6379 set str:7 CHANGED >/dev/null; valkey-cli --tls --cacert $CA -h $H_R70_STD -p 6379 del str:9 hash:3 >/dev/null
 valkey-cli --tls --cacert $CA -h $H_V90_CLS -p 6379 -a $VALKEY_AUTH --no-auth-warning -c set str:7 CHANGED >/dev/null; valkey-cli --tls --cacert $CA -h $H_V90_CLS -p 6379 -a $VALKEY_AUTH --no-auth-warning -c del str:9 hash:3 >/dev/null
 run drift-r70-std diff "${SRC[@]}" "${T_R70_STD[@]}"
