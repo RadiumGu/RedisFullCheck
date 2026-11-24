@@ -26,3 +26,6 @@ diagnostic/
 *.pid
 src/vendor/*
 !src/vendor/vendor.json
+redis-full-check-linux-arm64
+test/tokyo/env.sh
+redis-full-check-linux-amd64

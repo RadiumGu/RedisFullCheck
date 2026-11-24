@@ -1,13 +1,16 @@
 package client
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"strconv"
 	"strings"
 	"time"
-	"errors"
 
 	"full_check/common"
 
@@ -27,7 +30,51 @@ type RedisHost struct {
 	Role         string // "source" or "target"
 	Authtype     string // "auth" or "adminauth"
 	DBType       int
-	DBFilterList map[int]struct{} // whitelist
+	DBFilterList map[int]struct{} // allowlist
+	TLS          *TLSOptions      // nil = plaintext
+}
+
+// TLSOptions describes TLS settings for one redis endpoint.
+type TLSOptions struct {
+	Insecure   bool   // skip server cert verification
+	CACertFile string // PEM CA bundle, empty = system roots
+	CertFile   string // client cert (mTLS)
+	KeyFile    string // client key (mTLS)
+	ServerName string // override SNI / verification name
+}
+
+// BuildTLSConfig converts TLSOptions into a *tls.Config (nil if o is nil).
+func (o *TLSOptions) BuildTLSConfig() (*tls.Config, error) {
+	if o == nil {
+		return nil, nil
+	}
+	cfg := &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: o.Insecure,
+		ServerName:         o.ServerName,
+	}
+	if o.CACertFile != "" {
+		pem, err := ioutil.ReadFile(o.CACertFile)
+		if err != nil {
+			return nil, fmt.Errorf("read CA cert[%s] failed: %v", o.CACertFile, err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("no valid certificate in CA file[%s]", o.CACertFile)
+		}
+		cfg.RootCAs = pool
+	}
+	if (o.CertFile == "") != (o.KeyFile == "") {
+		return nil, fmt.Errorf("tls cert and key must be given together")
+	}
+	if o.CertFile != "" {
+		cert, err := tls.LoadX509KeyPair(o.CertFile, o.KeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("load client cert/key failed: %v", err)
+		}
+		cfg.Certificates = []tls.Certificate{cert}
+	}
+	return cfg, nil
 }
 
 func (p RedisHost) String() string {
@@ -89,17 +136,26 @@ func (p *RedisClient) Connect() error {
 	}
 
 	var err error
+	tlsCfg, err := p.redisHost.TLS.BuildTLSConfig()
+	if err != nil {
+		return err
+	}
 	if p.redisHost.IsCluster() == false {
 		// single db or proxy
-		if p.redisHost.TimeoutMs == 0 {
-			p.conn, err = redis.Dial("tcp", p.redisHost.Addr[0])
-		} else {
-			p.conn, err = redis.DialTimeout("tcp", p.redisHost.Addr[0], time.Millisecond*time.Duration(p.redisHost.TimeoutMs),
-				time.Millisecond*time.Duration(p.redisHost.TimeoutMs), time.Millisecond*time.Duration(p.redisHost.TimeoutMs))
+		timeout := time.Millisecond * time.Duration(p.redisHost.TimeoutMs)
+		opts := []redis.DialOption{
+			redis.DialConnectTimeout(timeout),
+			redis.DialReadTimeout(timeout),
+			redis.DialWriteTimeout(timeout),
 		}
+		if tlsCfg != nil {
+			opts = append(opts, redis.DialUseTLS(true), redis.DialTLSConfig(tlsCfg))
+		}
+		p.conn, err = redis.Dial("tcp", p.redisHost.Addr[0], opts...)
 	} else {
 		// cluster
-		cluster, err := redigoCluster.NewCluster(
+		var cluster *redigoCluster.Cluster
+		cluster, err = redigoCluster.NewCluster(
 			&redigoCluster.Options{
 				StartNodes:   p.redisHost.Addr,
 				ConnTimeout:  time.Duration(p.redisHost.TimeoutMs) * time.Millisecond,
@@ -108,6 +164,7 @@ func (p *RedisClient) Connect() error {
 				KeepAlive:    16,
 				AliveTime:    60 * time.Second,
 				Password:     p.redisHost.Password,
+				TLSConfig:    tlsCfg,
 			})
 		if err == nil {
 			p.conn = common.NewClusterConn(cluster, 0)
@@ -179,7 +236,7 @@ type combine struct {
 }
 
 func (c combine) String() string {
-	all := make([]string, 0, len(c.params) + 1)
+	all := make([]string, 0, len(c.params)+1)
 	all = append(all, c.command)
 	for _, ele := range c.params {
 		all = append(all, string(ele.([]byte)))
