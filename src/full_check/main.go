@@ -100,7 +100,23 @@ func main() {
 		common.BigKeyThreshold = conf.Opts.BigKeyThreshold
 	}
 
-	sourceAddressList, err := client.HandleAddress(conf.Opts.SourceAddr, conf.Opts.SourcePassword, conf.Opts.SourceAuthType)
+	var sourceTLS, targetTLS *client.TLSOptions
+	if conf.Opts.SourceTLS {
+		sourceTLS = &client.TLSOptions{Insecure: conf.Opts.SourceTLSInsecure, CACertFile: conf.Opts.SourceTLSCACert,
+			CertFile: conf.Opts.SourceTLSCert, KeyFile: conf.Opts.SourceTLSKey, ServerName: conf.Opts.SourceTLSServerName}
+		if _, err := sourceTLS.BuildTLSConfig(); err != nil {
+			panic(common.Logger.Errorf("source tls config illegal[%v]", err))
+		}
+	}
+	if conf.Opts.TargetTLS {
+		targetTLS = &client.TLSOptions{Insecure: conf.Opts.TargetTLSInsecure, CACertFile: conf.Opts.TargetTLSCACert,
+			CertFile: conf.Opts.TargetTLSCert, KeyFile: conf.Opts.TargetTLSKey, ServerName: conf.Opts.TargetTLSServerName}
+		if _, err := targetTLS.BuildTLSConfig(); err != nil {
+			panic(common.Logger.Errorf("target tls config illegal[%v]", err))
+		}
+	}
+
+	sourceAddressList, err := client.HandleAddress(conf.Opts.SourceAddr, conf.Opts.SourcePassword, conf.Opts.SourceAuthType, sourceTLS)
 	if err != nil {
 		panic(common.Logger.Errorf("source address[%v] illegal[%v]", conf.Opts.SourceAddr, err))
 	} else if len(sourceAddressList) > 1 && conf.Opts.SourceDBType != 1 {
@@ -109,7 +125,7 @@ func main() {
 		panic(common.Logger.Errorf("input source address is empty"))
 	}
 
-	targetAddressList, err := client.HandleAddress(conf.Opts.TargetAddr, conf.Opts.TargetPassword, conf.Opts.TargetAuthType)
+	targetAddressList, err := client.HandleAddress(conf.Opts.TargetAddr, conf.Opts.TargetPassword, conf.Opts.TargetAuthType, targetTLS)
 	if err != nil {
 		panic(common.Logger.Errorf("target address[%v] illegal[%v]", conf.Opts.TargetAddr, err))
 	} else if len(targetAddressList) > 1 && conf.Opts.TargetDBType != 1 {
@@ -145,6 +161,7 @@ func main() {
 			Role:         "source",
 			Authtype:     conf.Opts.SourceAuthType,
 			DBType:       conf.Opts.SourceDBType,
+			TLS:          sourceTLS,
 			DBFilterList: common.FilterDBList(conf.Opts.SourceDBFilterList),
 		},
 		TargetHost: client.RedisHost{
@@ -154,6 +171,7 @@ func main() {
 			Role:         "target",
 			Authtype:     conf.Opts.TargetAuthType,
 			DBType:       conf.Opts.TargetDBType,
+			TLS:          targetTLS,
 			DBFilterList: common.FilterDBList(conf.Opts.TargetDBFilterList),
 		},
 		ResultDBFile: conf.Opts.ResultDBFile,
