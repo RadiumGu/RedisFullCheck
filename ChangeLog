@@ -1,3 +1,10 @@
+2026-11-26 RadiumGu (fork).
+    * VERSION: 1.4.13
+    * SECURITY: passwords can be passed via RFC_SOURCE_PASSWORD /
+    RFC_TARGET_PASSWORD instead of -p/-a; passwords are redacted in the
+    'configuration:' log line (were printed in plaintext).
+    * IMPROVE: --systemprofile=-1 disables the profiling HTTP listener
+    (the option was unsigned, so it could not be turned off).
 2026-11-24 RadiumGu (fork).
     * VERSION: 1.4.12
     * FEATURE: TLS support for source and target (standalone, cluster,

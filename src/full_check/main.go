@@ -54,7 +54,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	nimo.Profiling(int(conf.Opts.SystemProfile))
+	nimo.Profiling(conf.Opts.SystemProfile)
 
 	common.Logger, err = common.InitLog(conf.Opts.LogFile, logLevel)
 	if err != nil {
@@ -182,7 +182,15 @@ func main() {
 		FilterTree:   filterTree,
 	}
 
-	common.Logger.Info("configuration: ", conf.Opts)
+	// do not write secrets into the log
+	logOpts := conf.Opts
+	if logOpts.SourcePassword != "" {
+		logOpts.SourcePassword = "<redacted>"
+	}
+	if logOpts.TargetPassword != "" {
+		logOpts.TargetPassword = "<redacted>"
+	}
+	common.Logger.Info("configuration: ", logOpts)
 	common.Logger.Info("---------")
 
 	fullCheck := full_check.NewFullCheck(fullCheckParameter, full_check.CheckType(conf.Opts.CompareMode))
