@@ -59,6 +59,8 @@ cd RedisFullCheck && ./build.sh
 * 集群模式用配置端点，写成 `master@<配置端点>:6379`，并加 `--targetdbtype 1`（源端用 `--sourcedbtype 1`）。节点自动发现，所有节点连接使用同一套 TLS 设置。
 * 证书按集群返回的节点地址校验。ElastiCache（开启 TLS）在默认设置下校验通过（已测 Redis OSS 7.0 / Valkey 9.0）。如果集群返回 IP、证书里没有对应 IP，用 `--*tlsservername` 指定证书中的域名，或临时用 `--*tlsinsecure`。
 * 对只开 TLS 的端点忘记加 `--*tls` 时，程序会卡住而不是报错，脚本里建议套 `timeout`。
+* 口令建议用环境变量 `RFC_SOURCE_PASSWORD` / `RFC_TARGET_PASSWORD` 传，不用 `-p` / `-a`，口令就不会出现在进程列表里。启动日志的 `configuration:` 行里口令显示为 `<redacted>`。
+* Go profiling 的 HTTP 服务默认在所有网卡监听 `--systemprofile` 端口（20445），用 `--systemprofile=-1` 关闭。
 * `-m 1` 做全量值比对，最严格；默认 `-m 2` 只比对长度。
 * 校验结果在 sqlite3 文件 `result.db.N` 中，N 是轮次，例如 `sqlite3 result.db.3 'select * from key'`。
 

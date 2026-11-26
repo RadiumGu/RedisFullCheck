@@ -46,10 +46,10 @@ Usage:
 
 Application Options:
   -s, --source=SOURCE               Set host:port of source redis.
-  -p, --sourcepassword=Password     Set source redis password (format: password or username:password)
+  -p, --sourcepassword=Password     Set source redis password (format: password or username:password) [$RFC_SOURCE_PASSWORD]
       --sourceauthtype=AUTH-TYPE    useless for opensource redis, valid value:auth/adminauth (default: auth)
   -t, --target=TARGET               Set host:port of target redis.
-  -a, --targetpassword=Password     Set target redis password (format: password or username:password)
+  -a, --targetpassword=Password     Set target redis password (format: password or username:password) [$RFC_TARGET_PASSWORD]
       --targetauthtype=AUTH-TYPE    useless for opensource redis, valid value:auth/adminauth (default: auth)
   -d, --db=Sqlite3-DB-FILE          sqlite3 db file for store result. If exist, it will be removed and a new file is created. (default: result.db)
       --comparetimes=COUNT          Total compare count, at least 1. In the first round, all keys will be compared. The subsequent rounds of the comparison
@@ -115,6 +115,8 @@ Notes:
 * For cluster mode, pass the configuration endpoint as `master@<endpoint>:6379` with `--targetdbtype 1` (or `--sourcedbtype 1`). Nodes are discovered by `CLUSTER NODES` and every node connection uses the same TLS settings.
 * Certificate verification uses the node address returned by the cluster. With ElastiCache (TLS enabled) verification passes with default settings (tested on Redis OSS 7.0 / Valkey 9.0). If your cluster returns IPs and the certificate has no IP SAN, use `--*tlsservername` (e.g. a wildcard name in the cert) or `--*tlsinsecure`.
 * If you forget `--*tls` against a TLS-only endpoint, the connection hangs instead of failing quickly. Run with a timeout in automation.
+* Passwords: prefer the environment variables `RFC_SOURCE_PASSWORD` / `RFC_TARGET_PASSWORD` over `-p` / `-a`, so secrets do not appear in the process list. The `configuration:` log line shows passwords as `<redacted>`.
+* The Go profiling HTTP server listens on all interfaces at `--systemprofile` (default 20445). Use `--systemprofile=-1` to disable it.
 * Validation scripts: [test/tokyo](test/tokyo).
 
 Here comes the sqlite3 example to display the conflict result:<br>
